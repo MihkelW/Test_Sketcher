@@ -1271,7 +1271,7 @@ var BP3D;
     (function (Model) {
         /** The default wall texture. */
         var defaultWallTexture = {
-            url: "rooms/textures/wallmap.png",
+            url: null,
             stretch: true,
             scale: 0
         };
@@ -1436,7 +1436,7 @@ var BP3D;
     (function (Model) {
         /** Default texture to be used if nothing is provided. */
         var defaultRoomTexture = {
-            url: "rooms/textures/hardwood.png",
+            url: null,
             scale: 400
         };
         /**
@@ -2617,8 +2617,8 @@ var BP3D;
             DRAW: 1,
             DELETE: 2
         };
-        // grid parameters
-        var gridSpacing = 20; // pixels
+        // grid parameters (2D floorplan background)
+        var gridSpacing = 20; // pixels for subtle UI background grid
         var gridWidth = 1;
         var gridColor = "#f1f1f1";
         // room config
@@ -2648,6 +2648,10 @@ var BP3D;
                 this.canvas = canvas;
                 this.canvasElement = document.getElementById(canvas);
                 this.context = this.canvasElement.getContext('2d');
+                // grid spacing (cm): spacingX = distance between vertical lines, spacingY = distance between horizontal lines
+                // default to 1.2 m vertical, 2.1 m horizontal
+                this.gridSpacingXcm = 120.0;
+                this.gridSpacingYcm = 210.0;
                 var scope = this;
                 $(window).resize(function () {
                     scope.handleWindowResize();
@@ -2668,6 +2672,10 @@ var BP3D;
             FloorplannerView.prototype.draw = function () {
                 var _this = this;
                 this.context.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+                // reset dynamic counters per frame
+                this.countModulesAcc = 0;
+                this.countFillersAcc = 0;
+                // Background grid: default subtle pixel grid
                 this.drawGrid();
                 this.floorplan.getRooms().forEach(function (room) {
                     _this.drawRoom(room);
@@ -2684,6 +2692,25 @@ var BP3D;
                 this.floorplan.getWalls().forEach(function (wall) {
                     _this.drawWallLabels(wall);
                 });
+                // update UI totals after rooms pass
+                try {
+                    var modEl = document.getElementById('count-modules');
+                    var fillEl = document.getElementById('count-fillers');
+                    var clampEl = document.getElementById('count-clamps');
+                    var priceModEl = document.getElementById('price-modules');
+                    var priceFillEl = document.getElementById('price-fillers');
+                    var priceClampEl = document.getElementById('price-clamps');
+                    var modules = this.countModulesAcc || 0;
+                    var fillers = this.countFillersAcc || 0;
+                    var clamps = 3 * (modules + fillers);
+                    if (modEl) { modEl.textContent = String(modules); }
+                    if (fillEl) { fillEl.textContent = String(fillers); }
+                    if (clampEl) { clampEl.textContent = String(clamps); }
+                    if (priceModEl) { priceModEl.textContent = " = " + (70 * modules) + "€"; }
+                    if (priceFillEl) { priceFillEl.textContent = " = " + (70 * fillers) + "€"; }
+                    if (priceClampEl) { priceClampEl.textContent = " = " + (2.5 * clamps) + "€"; }
+                }
+                catch (e) { }
             };
             /** */
             FloorplannerView.prototype.drawWallLabels = function (wall) {
@@ -2758,11 +2785,109 @@ var BP3D;
             /** */
             FloorplannerView.prototype.drawRoom = function (room) {
                 var scope = this;
-                this.drawPolygon(BP3D.Core.Utils.map(room.corners, function (corner) {
-                    return scope.viewmodel.convertX(corner.x);
-                }), BP3D.Core.Utils.map(room.corners, function (corner) {
-                    return scope.viewmodel.convertY(corner.y);
-                }), true, roomColor);
+                var xs = BP3D.Core.Utils.map(room.corners, function (corner) { return scope.viewmodel.convertX(corner.x); });
+                var ys = BP3D.Core.Utils.map(room.corners, function (corner) { return scope.viewmodel.convertY(corner.y); });
+
+                // Create a clipping path for the room polygon
+                this.context.save();
+                this.drawPolygon(xs, ys, false, null, true, 0, "#000000");
+                this.context.clip();
+
+                // Metric grid: use current presets (cm)
+                var spacingX = this.gridSpacingXcm * this.viewmodel.pixelsPerCm; // px between verticals
+                var spacingY = this.gridSpacingYcm * this.viewmodel.pixelsPerCm; // px between horizontals
+                spacingX = Math.max(4, spacingX);
+                spacingY = Math.max(4, spacingY);
+
+                var width = this.canvasElement.width;
+                var height = this.canvasElement.height;
+                var offsetX = this.calculateGridOffset(-this.viewmodel.originX, spacingX);
+                var offsetY = this.calculateGridOffset(-this.viewmodel.originY, spacingY);
+                // Fill interior cells (that do not intersect perimeter) with gray and count
+                var poly = [];
+                for (var i = 0; i < xs.length; i++) { poly.push({ x: xs[i], y: ys[i] }); }
+                var minX = Math.min.apply(null, xs);
+                var maxX = Math.max.apply(null, xs);
+                var minY = Math.min.apply(null, ys);
+                var maxY = Math.max.apply(null, ys);
+                // Determine grid indices spanning slightly beyond the polygon bounds
+                var firstCol = Math.floor((minX - offsetX) / spacingX) - 1;
+                var lastCol = Math.ceil((maxX - offsetX) / spacingX) + 1;
+                var firstRow = Math.floor((minY - offsetY) / spacingY) - 1;
+                var lastRow = Math.ceil((maxY - offsetY) / spacingY) + 1;
+                this.context.fillStyle = "#f59e0b";
+                var countModules = 0;
+                var countFillers = 0;
+                for (var col = firstCol; col <= lastCol; col++) {
+                    var x0 = offsetX + col * spacingX;
+                    var x1 = x0 + spacingX;
+                    for (var row = firstRow; row <= lastRow; row++) {
+                        var y0 = offsetY + row * spacingY;
+                        var y1 = y0 + spacingY;
+                        // rectangle edges
+                        var rectEdges = [
+                            [x0, y0, x1, y0],
+                            [x1, y0, x1, y1],
+                            [x1, y1, x0, y1],
+                            [x0, y1, x0, y0]
+                        ];
+                        // check intersection with polygon edges
+                        var intersects = false;
+                        for (var ei = 0; ei < poly.length; ei++) {
+                            var ex1 = poly[ei].x, ey1 = poly[ei].y;
+                            var ej = (ei + 1) % poly.length;
+                            var ex2 = poly[ej].x, ey2 = poly[ej].y;
+                            for (var ri = 0; ri < rectEdges.length; ri++) {
+                                var e = rectEdges[ri];
+                                if (BP3D.Core.Utils.lineLineIntersect(ex1, ey1, ex2, ey2, e[0], e[1], e[2], e[3])) {
+                                    intersects = true;
+                                    break;
+                                }
+                            }
+                            if (intersects) break;
+                        }
+                        // check center point inside
+                        var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+                        var centerInside = BP3D.Core.Utils.pointInPolygon(cx, cy, poly, minX - 10, minY - 10);
+                        // If tile intersects walls, or overlaps polygon (any corner inside or center inside) but is not fully interior, treat as filler
+                        var cornerInside = (
+                            BP3D.Core.Utils.pointInPolygon(x0 + 0.5, y0 + 0.5, poly, minX - 10, minY - 10) ||
+                            BP3D.Core.Utils.pointInPolygon(x1 - 0.5, y0 + 0.5, poly, minX - 10, minY - 10) ||
+                            BP3D.Core.Utils.pointInPolygon(x1 - 0.5, y1 - 0.5, poly, minX - 10, minY - 10) ||
+                            BP3D.Core.Utils.pointInPolygon(x0 + 0.5, y1 - 0.5, poly, minX - 10, minY - 10)
+                        );
+                        if (intersects || (cornerInside && !centerInside)) {
+                            // any tile that intersects walls, or has any corner inside while center is outside
+                            countFillers++;
+                        }
+                        if (centerInside && !intersects) {
+                            this.context.fillRect(x0, y0, spacingX, spacingY);
+                            countModules++;
+                        }
+                    }
+                }
+
+                // Update UI counts if present
+                // accumulate counts per room and defer DOM update to outer draw
+                this.countModulesAcc += countModules;
+                this.countFillersAcc += countFillers;
+
+                // Draw grid lines on top (only across the room bounds for performance)
+                this.context.strokeStyle = "#000000";
+                this.context.lineWidth = 1;
+                this.context.beginPath();
+                for (var x = firstCol; x <= lastCol; x++) {
+                    var vx = offsetX + x * spacingX;
+                    this.context.moveTo(vx, minY - spacingY);
+                    this.context.lineTo(vx, maxY + spacingY);
+                }
+                for (var y = firstRow; y <= lastRow; y++) {
+                    var hy = offsetY + y * spacingY;
+                    this.context.moveTo(minX - spacingX, hy);
+                    this.context.lineTo(maxX + spacingX, hy);
+                }
+                this.context.stroke();
+                this.context.restore();
             };
             /** */
             FloorplannerView.prototype.drawCorner = function (corner) {
@@ -2823,18 +2948,19 @@ var BP3D;
                 this.context.fill();
             };
             /** returns n where -gridSize/2 < n <= gridSize/2  */
-            FloorplannerView.prototype.calculateGridOffset = function (n) {
+            FloorplannerView.prototype.calculateGridOffset = function (n, spacing) {
                 if (n >= 0) {
-                    return (n + gridSpacing / 2.0) % gridSpacing - gridSpacing / 2.0;
+                    return (n + spacing / 2.0) % spacing - spacing / 2.0;
                 }
                 else {
-                    return (n - gridSpacing / 2.0) % gridSpacing + gridSpacing / 2.0;
+                    return (n - spacing / 2.0) % spacing + spacing / 2.0;
                 }
             };
             /** */
             FloorplannerView.prototype.drawGrid = function () {
-                var offsetX = this.calculateGridOffset(-this.viewmodel.originX);
-                var offsetY = this.calculateGridOffset(-this.viewmodel.originY);
+                // Restore subtle pixel-based background grid
+                var offsetX = this.calculateGridOffset(-this.viewmodel.originX, gridSpacing);
+                var offsetY = this.calculateGridOffset(-this.viewmodel.originY, gridSpacing);
                 var width = this.canvasElement.width;
                 var height = this.canvasElement.height;
                 for (var x = 0; x <= (width / gridSpacing); x++) {
@@ -3500,6 +3626,7 @@ var BP3D;
             var scene = scene;
             var floorPlane = null;
             var roofPlane = null;
+            var gridOverlay = null;
             init();
             function init() {
                 scope.room.fireOnFloorChange(redraw);
@@ -3514,18 +3641,26 @@ var BP3D;
             }
             function buildFloor() {
                 var textureSettings = scope.room.getTexture();
-                // setup texture
-                var floorTexture = THREE.ImageUtils.loadTexture(textureSettings.url);
-                floorTexture.wrapS = THREE.RepeatWrapping;
-                floorTexture.wrapT = THREE.RepeatWrapping;
-                floorTexture.repeat.set(1, 1);
-                var floorMaterialTop = new THREE.MeshPhongMaterial({
-                    map: floorTexture,
-                    side: THREE.DoubleSide,
-                    // ambient: 0xffffff, TODO_Ekki
-                    color: 0xcccccc,
-                    specular: 0x0a0a0a
-                });
+                // setup material (texture optional)
+                var floorMaterialTop;
+                if (textureSettings && textureSettings.url) {
+                    var floorTexture = THREE.ImageUtils.loadTexture(textureSettings.url);
+                    floorTexture.wrapS = THREE.RepeatWrapping;
+                    floorTexture.wrapT = THREE.RepeatWrapping;
+                    floorTexture.repeat.set(1, 1);
+                    floorMaterialTop = new THREE.MeshPhongMaterial({
+                        map: floorTexture,
+                        side: THREE.DoubleSide,
+                        color: 0xcccccc,
+                        specular: 0x0a0a0a
+                    });
+                } else {
+                    floorMaterialTop = new THREE.MeshPhongMaterial({
+                        side: THREE.DoubleSide,
+                        color: 0xcccccc,
+                        specular: 0x0a0a0a
+                    });
+                }
                 var textureScale = textureSettings.scale;
                 // http://stackoverflow.com/questions/19182298/how-to-texture-a-three-js-mesh-created-with-shapegeometry
                 // scale down coords to fit 0 -> 1, then rescale
@@ -3540,6 +3675,58 @@ var BP3D;
                 floor.scale.set(textureScale, textureScale, textureScale);
                 floor.receiveShadow = true;
                 floor.castShadow = false;
+
+                // Build grid overlay using line segments with specified spacings (in cm)
+                // Horizontal lines (run along X) spaced 2.1 m = 210 cm along Z
+                // Vertical lines (run along Z) spaced 1.2 m = 120 cm along X
+                try {
+                    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                    scope.room.interiorCorners.forEach(function (corner) {
+                        if (corner.x < minX) { minX = corner.x; }
+                        if (corner.x > maxX) { maxX = corner.x; }
+                        if (corner.y < minY) { minY = corner.y; }
+                        if (corner.y > maxY) { maxY = corner.y; }
+                    });
+                    // Convert to local (geometry) units by dividing by textureScale
+                    var localMinX = minX / textureScale;
+                    var localMaxX = maxX / textureScale;
+                    var localMinY = minY / textureScale;
+                    var localMaxY = maxY / textureScale;
+                    var stepX = 120.0 / textureScale; // 1.2 m in local units
+                    var stepY = 210.0 / textureScale; // 2.1 m in local units
+                    var xStart = Math.floor(localMinX / stepX) * stepX;
+                    var xEnd = Math.ceil(localMaxX / stepX) * stepX;
+                    var yStart = Math.floor(localMinY / stepY) * stepY;
+                    var yEnd = Math.ceil(localMaxY / stepY) * stepY;
+
+                    var positions = [];
+                    // Build in local XY plane (z=0); we'll rotate/position to match floor
+                    for (var x = xStart; x <= xEnd + 1e-6; x += stepX) {
+                        positions.push(x, localMinY, 0);
+                        positions.push(x, localMaxY, 0);
+                    }
+                    for (var y = yStart; y <= yEnd + 1e-6; y += stepY) {
+                        positions.push(localMinX, y, 0);
+                        positions.push(localMaxX, y, 0);
+                    }
+
+                    var gridGeometry = new THREE.Geometry();
+                    for (var i = 0; i < positions.length; i += 6) {
+                        gridGeometry.vertices.push(
+                            new THREE.Vector3(positions[i + 0], positions[i + 1], positions[i + 2]),
+                            new THREE.Vector3(positions[i + 3], positions[i + 4], positions[i + 5])
+                        );
+                    }
+                    var gridMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+                    gridOverlay = new THREE.LineSegments(gridGeometry, gridMaterial);
+                    // Match floor transform so lines align with scaled/rotated floor
+                    gridOverlay.rotation.copy(floor.rotation);
+                    gridOverlay.scale.copy(floor.scale);
+                    gridOverlay.position.copy(floor.position);
+                    gridOverlay.position.y += 0.1; // lift in world Y to avoid z-fighting
+                } catch (e) {
+                    gridOverlay = null;
+                }
                 return floor;
             }
             function buildRoof() {
@@ -3561,12 +3748,14 @@ var BP3D;
             }
             this.addToScene = function () {
                 scene.add(floorPlane);
+                if (gridOverlay) { scene.add(gridOverlay); }
                 //scene.add(roofPlane);
                 // hack so we can do intersect testing
                 scene.add(room.floorPlane);
             };
             this.removeFromScene = function () {
                 scene.remove(floorPlane);
+                if (gridOverlay) { scene.remove(gridOverlay); gridOverlay = null; }
                 //scene.remove(roofPlane);
                 scene.remove(room.floorPlane);
             };
@@ -3590,7 +3779,7 @@ var BP3D;
             var planes = [];
             var basePlanes = []; // always visible
             var texture = null;
-            var lightMap = THREE.ImageUtils.loadTexture("rooms/textures/walllightmap.png");
+            // removed unused wall light map
             var fillerColor = 0xdddddd;
             var sideColor = 0xcccccc;
             var baseColor = 0xdddddd;
@@ -3672,8 +3861,12 @@ var BP3D;
                 var stretch = textureData.stretch;
                 var url = textureData.url;
                 var scale = textureData.scale;
-                texture = THREE.ImageUtils.loadTexture(url, null, callback);
-                if (!stretch) {
+                if (url) {
+                    texture = THREE.ImageUtils.loadTexture(url, null, callback);
+                } else {
+                    texture = null;
+                }
+                if (texture && !stretch) {
                     var height = wall.height;
                     var width = edge.interiorDistance();
                     texture.wrapT = THREE.RepeatWrapping;
@@ -4756,13 +4949,14 @@ var BP3D;
          */
         function Blueprint3d(options) {
             this.model = new BP3D.Model.Model(options.textureDir);
-            this.three = new BP3D.Three.Main(this.model, options.threeElement, options.threeCanvasElement, {});
-            if (!options.widget) {
-                this.floorplanner = new BP3D.Floorplanner.Floorplanner(options.floorplannerElement, this.model.floorplan);
+            // Initialize 3D only when a valid element is provided
+            if (options.threeElement && options.threeCanvasElement) {
+                this.three = new BP3D.Three.Main(this.model, options.threeElement, options.threeCanvasElement, {});
+            } else {
+                this.three = null;
             }
-            else {
-                this.three.getController().enabled = false;
-            }
+            // Always initialize the 2D floorplanner
+            this.floorplanner = new BP3D.Floorplanner.Floorplanner(options.floorplannerElement, this.model.floorplan);
         }
         return Blueprint3d;
     })();

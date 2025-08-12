@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Blueprint 3D - Example</title>
 
     <link href="css/bootstrap.css" rel="stylesheet">
@@ -76,21 +77,39 @@
           <div id="floorplanner">
             <canvas id="floorplanner-canvas"></canvas>
             <div id="floorplanner-controls">
+              <div class="fp-controls-inner">
+                <button id="move" class="btn btn-sm btn-default">
+                  <span class="glyphicon glyphicon-move"></span>
+                  Liiguta
+                </button>
+                <button id="draw" class="btn btn-sm btn-default">
+                  <span class="glyphicon glyphicon-pencil"></span>
+                  Joonista
+                </button>
+                <button id="delete" class="btn btn-sm btn-default">
+                  <span class="glyphicon glyphicon-remove"></span>
+                  Kustuta
+                </button>
 
-              <button id="move" class="btn btn-sm btn-default">
-                <span class="glyphicon glyphicon-move"></span>
-                Move Walls
-              </button>
-              <button id="draw" class="btn btn-sm btn-default">
-                <span class="glyphicon glyphicon-pencil"></span>
-                Draw Walls
-              </button>
-              <button id="delete" class="btn btn-sm btn-default">
-                <span class="glyphicon glyphicon-remove"></span>
-                Delete Walls
-              </button>
+                <!-- Grid presets row -->
+                <div id="grid-presets" class="btn-group" style="margin-top: 8px;">
+                  <button id="preset-1" class="btn btn-sm btn-default">1.8 x 1.0</button>
+                  <button id="preset-2" class="btn btn-sm btn-default">2.4 x 1.2</button>
+                  <button id="preset-3" class="btn btn-sm btn-default">1.1 x 2.3</button>
+                </div>
 
-
+                <div id="stats-text">
+                  <div class="btn btn-sm btn-default stat-line" style="pointer-events: none;">
+                    Päikesemoodulite arv: <span id="count-modules">0</span><span id="price-modules"></span>
+                  </div>
+                  <div class="btn btn-sm btn-default stat-line" style="pointer-events: none;">
+                    Täitepaneelide arv: <span id="count-fillers">0</span><span id="price-fillers"></span>
+                  </div>
+                  <div class="btn btn-sm btn-default stat-line" style="pointer-events: none;">
+                    Klambrite arv: <span id="count-clamps">0</span><span id="price-clamps"></span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div id="draw-walls-hint">
               Press the "Esc" key to stop drawing walls

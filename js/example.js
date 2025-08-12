@@ -94,7 +94,6 @@ var FloorplanManager = function(blueprint3d, floorplanControls) {
 
   function init() {
     initFloorplanView();
-    blueprint3d.three.updateWindowSize();
     handleWindowResize();
   }
 
@@ -180,6 +179,26 @@ var ViewerFloorplanner = function(blueprint3d) {
     $(remove).click(function(){
       scope.floorplanner.setMode(BP3D.Floorplanner.floorplannerModes.DELETE);
     });
+
+    // grid preset buttons
+    function setPreset(activeId, gridXcm, gridYcm) {
+      scope.floorplanner.view.gridSpacingXcm = gridXcm;
+      scope.floorplanner.view.gridSpacingYcm = gridYcm;
+      // update active style
+      $("#grid-presets .btn").removeClass("btn-primary disabled");
+      $("#"+activeId).addClass("btn-primary disabled");
+      scope.floorplanner.view.draw();
+    }
+
+    // 1.8 x 1.0 → landscape (horizontal 1.8 m, vertical 1.0 m)
+    $("#preset-1").click(function(){ setPreset("preset-1", 180.0, 100.0); });
+    // 2.4 x 1.2 → landscape (horizontal 2.4 m, vertical 1.2 m)
+    $("#preset-2").click(function(){ setPreset("preset-2", 240.0, 120.0); });
+    // 1.1 x 2.3 → portrait (horizontal 1.1 m, vertical 2.3 m)
+    $("#preset-3").click(function(){ setPreset("preset-3", 110.0, 230.0); });
+
+    // initialize default preset button to match default spacings close to 2.1 x 1.2
+    setPreset("preset-2", 240.0, 120.0);
   }
 
   this.updateFloorplanView = function() {
@@ -198,7 +217,8 @@ var mainControls = function(blueprint3d) {
   var blueprint3d = blueprint3d;
 
   function newDesign() {
-    blueprint3d.model.loadSerialized('{"floorplan":{"corners":{"f90da5e3-9e0e-eba7-173d-eb0b071e838e":{"x":204.85099999999989,"y":289.052},"da026c08-d76a-a944-8e7b-096b752da9ed":{"x":672.2109999999999,"y":289.052},"4e3d65cb-54c0-0681-28bf-bddcc7bdb571":{"x":672.2109999999999,"y":-178.308},"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2":{"x":204.85099999999989,"y":-178.308}},"walls":[{"corner1":"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2","corner2":"f90da5e3-9e0e-eba7-173d-eb0b071e838e","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"f90da5e3-9e0e-eba7-173d-eb0b071e838e","corner2":"da026c08-d76a-a944-8e7b-096b752da9ed","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"da026c08-d76a-a944-8e7b-096b752da9ed","corner2":"4e3d65cb-54c0-0681-28bf-bddcc7bdb571","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"4e3d65cb-54c0-0681-28bf-bddcc7bdb571","corner2":"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}}],"wallTextures":[],"floorTextures":{},"newFloorTextures":{}},"items":[]}');
+    // Start with a simple rectangle room without textures
+    blueprint3d.model.loadSerialized('{"floorplan":{"corners":{"c1":{"x":204.851,"y":289.052},"c2":{"x":672.211,"y":289.052},"c3":{"x":672.211,"y":-178.308},"c4":{"x":204.851,"y":-178.308}},"walls":[{"corner1":"c4","corner2":"c1"},{"corner1":"c1","corner2":"c2"},{"corner1":"c2","corner2":"c3"},{"corner1":"c3","corner2":"c4"}],"wallTextures":[],"floorTextures":{},"newFloorTextures":{}},"items":[]}');
   }
 
   function loadDesign() {
@@ -237,22 +257,21 @@ var mainControls = function(blueprint3d) {
 
 $(document).ready(function() {
 
-  // main setup
+  // main setup (2D only)
   var opts = {
     floorplannerElement: 'floorplanner-canvas',
-    threeElement: '#viewer',
-    threeCanvasElement: 'three-canvas',
+    threeElement: null,
+    threeCanvasElement: null,
     textureDir: "models/textures/",
-    widget: false
+    widget: true
   }
   var blueprint3d = new BP3D.Blueprint3d(opts);
 
   var viewerFloorplanner = new ViewerFloorplanner(blueprint3d);
   var floorplanManager = new FloorplanManager(blueprint3d, viewerFloorplanner);
-  var cameraButtons = new CameraButtons(blueprint3d);
+  // 2D-only: do not initialize camera buttons / 3D controls
   mainControls(blueprint3d);
 
-  // This serialization format needs work
-  // Load a simple rectangle room
-  blueprint3d.model.loadSerialized('{"floorplan":{"corners":{"f90da5e3-9e0e-eba7-173d-eb0b071e838e":{"x":204.85099999999989,"y":289.052},"da026c08-d76a-a944-8e7b-096b752da9ed":{"x":672.2109999999999,"y":289.052},"4e3d65cb-54c0-0681-28bf-bddcc7bdb571":{"x":672.2109999999999,"y":-178.308},"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2":{"x":204.85099999999989,"y":-178.308}},"walls":[{"corner1":"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2","corner2":"f90da5e3-9e0e-eba7-173d-eb0b071e838e","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"f90da5e3-9e0e-eba7-173d-eb0b071e838e","corner2":"da026c08-d76a-a944-8e7b-096b752da9ed","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"da026c08-d76a-a944-8e7b-096b752da9ed","corner2":"4e3d65cb-54c0-0681-28bf-bddcc7bdb571","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}},{"corner1":"4e3d65cb-54c0-0681-28bf-bddcc7bdb571","corner2":"71d4f128-ae80-3d58-9bd2-711c6ce6cdf2","frontTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0},"backTexture":{"url":"rooms/textures/wallmap.png","stretch":true,"scale":0}}],"wallTextures":[],"floorTextures":{},"newFloorTextures":{}},"items":[]}');
+  // Autoload a simple rectangle room without textures
+  blueprint3d.model.loadSerialized('{"floorplan":{"corners":{"c1":{"x":204.851,"y":289.052},"c2":{"x":672.211,"y":289.052},"c3":{"x":672.211,"y":-178.308},"c4":{"x":204.851,"y":-178.308}},"walls":[{"corner1":"c4","corner2":"c1"},{"corner1":"c1","corner2":"c2"},{"corner1":"c2","corner2":"c3"},{"corner1":"c3","corner2":"c4"}],"wallTextures":[],"floorTextures":{},"newFloorTextures":{}},"items":[]}');
 });

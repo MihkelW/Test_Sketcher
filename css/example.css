@@ -75,6 +75,69 @@ div {
   margin: 20px 0;
   padding: 0 20px; 
   width: 100%;
+  /* allow canvas interaction through non-button areas */
+  pointer-events: none;
+}
+
+/* constrain the control column so stats align to buttons */
+.fp-controls-inner {
+  display: inline-block;
+  vertical-align: top;
+}
+
+#floorplanner-controls .btn {
+  margin-right: 6px;
+  vertical-align: top;
+  /* re-enable events for buttons */
+  pointer-events: auto;
+}
+
+#floorplanner-controls .btn:last-child {
+  margin-right: 0;
+}
+
+/* stats lines match width of the three-button group */
+#stats-text {
+  margin-top: 8px;
+}
+
+.stat-line {
+  display: block;
+  width: 100%;
+  margin-top: 1px;
+  line-height: 1.0;
+  text-align: left;
+}
+
+/* Remove button chrome from stats so they look like plain text */
+#stats-text .btn {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* align grid preset buttons inline with the top buttons; add spacing when wrapped */
+#grid-presets {
+  display: inline-block;
+  margin-top: 6px;
+  margin-left: 6px;
+  vertical-align: top;
+}
+
+/* prevent stats from catching mouse events and blocking wall interactions */
+#stats-text { margin-top: 8px; }
+
+/* render stat text visually beneath interactive elements */
+.stat-line { position: relative; }
+
+/* brand the active buttons with #f59e0b instead of bootstrap blue */
+#floorplanner-controls .btn.btn-primary,
+#floorplanner-controls .btn.btn-primary:focus,
+#floorplanner-controls .btn.btn-primary:hover,
+#grid-presets .btn.btn-primary {
+  background-color: #f59e0b;
+  border-color: #f59e0b;
 }
 
 #draw-walls-hint {

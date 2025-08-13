@@ -3035,17 +3035,28 @@ var BP3D;
                 // Initialization:
                 this.setMode(Floorplanner_1.floorplannerModes.MOVE);
                 var scope = this;
-                this.canvasElement.mousedown(function () {
+                this.canvasElement.mousedown(function () { scope.mousedown(); });
+                this.canvasElement.mousemove(function (event) { scope.mousemove(event); });
+                this.canvasElement.mouseup(function () { scope.mouseup(); });
+                this.canvasElement.mouseleave(function () { scope.mouseleave(); });
+                // Touch support: map to existing handlers
+                var canvasNode = this.canvasElement.get(0);
+                canvasNode.addEventListener('touchstart', function (e) {
+                    if (e.touches && e.touches[0]) {
+                        scope.rawMouseX = e.touches[0].clientX;
+                        scope.rawMouseY = e.touches[0].clientY;
+                    }
                     scope.mousedown();
-                });
-                this.canvasElement.mousemove(function (event) {
-                    scope.mousemove(event);
-                });
-                this.canvasElement.mouseup(function () {
+                    e.preventDefault();
+                }, { passive: false });
+                canvasNode.addEventListener('touchmove', function (e) {
+                    if (e.touches && e.touches[0]) {
+                        scope.mousemove({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+                    }
+                    e.preventDefault();
+                }, { passive: false });
+                canvasNode.addEventListener('touchend', function () {
                     scope.mouseup();
-                });
-                this.canvasElement.mouseleave(function () {
-                    scope.mouseleave();
                 });
                 $(document).keyup(function (e) {
                     if (e.keyCode == 27) {

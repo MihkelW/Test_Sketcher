@@ -96,9 +96,10 @@ div {
   margin-right: 0;
 }
 
-/* stats lines match width of the three-button group */
+/* stats lines match width of the three-button group and never block interactions */
 #stats-text {
   margin-top: 8px;
+  pointer-events: none;
 }
 
 .stat-line {
